@@ -27,3 +27,4 @@
 
 # Vue.js
 - webpages must be responsive and mobile-friendly
+- use Composition API

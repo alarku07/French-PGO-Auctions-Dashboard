@@ -1,3 +1,49 @@
-.idea
-.venv
-initital task.pdf
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Environment
+.env
+.env.local
+.env.*.local
+src/backend/.env
+
+# Node / Frontend
+node_modules/
+src/frontend/dist/
+src/frontend/.vite/
+*.log
+
+# Data downloads cache (large files, not version-controlled)
+data/downloads/
+
+# Database files (SQLite, only for POC)
+*.db
+*.sqlite
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Misc (original planning file)
+"initital task.pdf"
+specify_prompt

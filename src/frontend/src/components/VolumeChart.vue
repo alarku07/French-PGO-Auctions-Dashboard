@@ -92,7 +92,9 @@ const chartOption = computed(() => {
     }
     const s = regionMap.get(point.region)!;
     s.periods.push(point.period);
-    s.allocated.push(point.volume_allocated_mwh ?? null);
+    // Pydantic v2 serialises Decimal as a JSON string; coerce to number here.
+    const alloc = point.volume_allocated_mwh;
+    s.allocated.push(alloc != null ? Number(alloc) : null);
   }
 
   const allPeriods = [...new Set(props.data.map((d) => d.period))].sort();

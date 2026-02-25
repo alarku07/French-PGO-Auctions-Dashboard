@@ -51,7 +51,9 @@ const chartOption = computed(() => {
     }
     const series = regionMap.get(point.region)!;
     series.dates.push(point.auction_date);
-    series.prices.push(point.weighted_avg_price_eur ?? null);
+    // Pydantic v2 serialises Decimal as a JSON string; coerce to number here.
+    const price = point.weighted_avg_price_eur;
+    series.prices.push(price != null ? Number(price) : null);
   }
 
   // Collect all unique dates for shared x-axis
@@ -82,15 +84,11 @@ const chartOption = computed(() => {
     backgroundColor: "transparent",
     tooltip: {
       trigger: "axis",
-      axisPointer: { type: "cross" },
-      formatter: (params: any[]) => {
-        const date = params[0]?.axisValue ?? "";
-        const lines = params
-          .filter((p) => Number.isFinite(p.value))
-          .map((p) => `${p.marker} ${p.seriesName}: <b>${(p.value as number).toFixed(4)} EUR/MWh</b>`)
-          .join("<br/>");
-        return `<div style="font-size:13px"><b>${date}</b><br/>${lines}</div>`;
-      },
+      axisPointer: { type: "line" },
+      valueFormatter: (value: unknown) =>
+        Number.isFinite(value as number)
+          ? `${(value as number).toFixed(4)} EUR/MWh`
+          : "—",
     },
     legend: {
       type: "scroll",

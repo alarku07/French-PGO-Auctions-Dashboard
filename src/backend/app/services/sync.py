@@ -24,10 +24,12 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.models.auction import Auction
+from app.models.auction_event import AuctionEvent
 from app.models.sync_log import SyncLog
 from app.services.parser import (
     parse_zip_archive,
     scrape_auction_calendar,
+    scrape_auction_events,
     scrape_latest_results,
 )
 
@@ -176,6 +178,131 @@ class SyncService:
         if removed:
             await session.flush()
         return removed
+
+    # ─── AuctionEvent upsert ─────────────────────────────────────────────────
+
+    async def _upsert_auction_event(
+        self,
+        session: AsyncSession,
+        event_dict: dict[str, Any],
+    ) -> str:
+        """Upsert one AuctionEvent by event_date. Returns 'added' | 'skipped'."""
+        event_date = event_dict["event_date"]
+        stmt = select(AuctionEvent).where(AuctionEvent.event_date == event_date)
+        result = await session.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing is None:
+            session.add(AuctionEvent(
+                event_date=event_date,
+                is_cancelled=event_dict.get("is_cancelled", False),
+                auctioning_month=event_dict.get("auctioning_month"),
+                production_month=event_dict.get("production_month"),
+                order_book_open=event_dict.get("order_book_open"),
+                cash_trading_limits_modification=event_dict.get("cash_trading_limits_modification"),
+                order_book_close=event_dict.get("order_book_close"),
+                order_matching=event_dict.get("order_matching"),
+            ))
+            return "added"
+
+        # Update nullable detail fields if new values are available
+        _detail_fields = (
+            "auctioning_month",
+            "production_month",
+            "order_book_open",
+            "cash_trading_limits_modification",
+            "order_book_close",
+            "order_matching",
+        )
+        for field in _detail_fields:
+            new_val = event_dict.get(field)
+            if new_val is not None:
+                setattr(existing, field, new_val)
+
+        return "skipped"
+
+    async def _bulk_upsert_auction_events(
+        self,
+        session: AsyncSession,
+        event_dicts: list[dict[str, Any]],
+    ) -> tuple[int, int]:
+        """Upsert a batch of AuctionEvents. Returns (added, skipped)."""
+        added = skipped = 0
+        for event_dict in event_dicts:
+            outcome = await self._upsert_auction_event(session, event_dict)
+            if outcome == "added":
+                added += 1
+            else:
+                skipped += 1
+        if added:
+            await session.flush()
+        return added, skipped
+
+    async def _link_auctions_to_events(
+        self,
+        session: AsyncSession,
+    ) -> int:
+        """Set auction_event_id on Auction rows that match an AuctionEvent by date.
+
+        Only updates rows where auction_event_id IS NULL to avoid re-linking.
+        Returns the number of rows linked.
+        """
+        # Fetch all AuctionEvents to build a date → id lookup
+        events_result = await session.execute(select(AuctionEvent))
+        event_by_date: dict[date, int] = {
+            e.event_date: e.id for e in events_result.scalars().all()
+        }
+        if not event_by_date:
+            return 0
+
+        # Fetch Auction rows with no event link whose date is in the event map
+        unlinked_stmt = select(Auction).where(
+            Auction.auction_event_id.is_(None),
+            Auction.auction_date.in_(list(event_by_date.keys())),
+        )
+        unlinked_result = await session.execute(unlinked_stmt)
+        unlinked = unlinked_result.scalars().all()
+
+        linked = 0
+        for auction in unlinked:
+            event_id = event_by_date.get(auction.auction_date)
+            if event_id is not None:
+                auction.auction_event_id = event_id
+                linked += 1
+
+        if linked:
+            await session.flush()
+        return linked
+
+    async def _mark_cancelled_events(
+        self,
+        session: AsyncSession,
+        live_event_dates: set[date],
+    ) -> int:
+        """Mark future AuctionEvents as cancelled when absent from the live calendar.
+
+        Only considers events with event_date >= today; past events are expected
+        not to appear on the live calendar and must not be auto-cancelled.
+        Already-cancelled events are excluded from the count.
+        Returns the number of events newly marked as cancelled.
+        """
+        stmt = select(AuctionEvent).where(
+            AuctionEvent.event_date >= date.today(),
+            AuctionEvent.is_cancelled.is_(False),
+        )
+        result = await session.execute(stmt)
+        upcoming_events = result.scalars().all()
+
+        cancelled = 0
+        for event in upcoming_events:
+            if event.event_date not in live_event_dates:
+                event.is_cancelled = True
+                cancelled += 1
+
+        if cancelled:
+            await session.flush()
+            logger.info("auction_events_cancelled", count=cancelled)
+        return cancelled
 
     # ─── SyncLog helpers ─────────────────────────────────────────────────────
 
@@ -345,15 +472,20 @@ class SyncService:
                     self._eex_base_url, http_client
                 )
 
+                # 3. Scrape auction events from EEX calendar
+                event_dicts = await scrape_auction_events(
+                    self._eex_base_url, http_client
+                )
+
             async with session_factory() as session:
-                # 3. Transition upcoming → past for dates with new results
+                # 4. Transition upcoming → past for dates with new results
                 transitions = await self._transition_upcoming_to_past(
                     session, result_records
                 )
                 if transitions:
                     logger.info("transitioned_to_past", count=transitions)
 
-                # 4. Upsert result records
+                # 5. Upsert result records
                 added, updated, skipped = await self._bulk_upsert(
                     session, result_records
                 )
@@ -361,7 +493,7 @@ class SyncService:
                 total_updated += updated
                 total_skipped += skipped
 
-                # 5. Upsert calendar records
+                # 6. Upsert calendar records
                 cal_added, cal_updated, cal_skipped = await self._bulk_upsert(
                     session, calendar_records
                 )
@@ -369,7 +501,7 @@ class SyncService:
                 total_updated += cal_updated
                 total_skipped += cal_skipped
 
-                # 6. Remove vanished upcoming entries
+                # 7. Remove vanished upcoming entries
                 calendar_dates = {
                     r["auction_date"]
                     for r in calendar_records
@@ -381,7 +513,29 @@ class SyncService:
                 if removed:
                     logger.info("removed_vanished_upcoming", count=removed)
 
-                # 7. Finalize sync log
+                # 8. Upsert auction events
+                live_event_dates = {d["event_date"] for d in event_dicts}
+                ev_added, ev_skipped = await self._bulk_upsert_auction_events(
+                    session, event_dicts
+                )
+
+                # 9. Link existing auctions to their events by date
+                linked = await self._link_auctions_to_events(session)
+
+                # 10. Mark cancelled events (future dates absent from live calendar)
+                cancelled = await self._mark_cancelled_events(
+                    session, live_event_dates
+                )
+
+                logger.info(
+                    "auction_events_synced",
+                    added=ev_added,
+                    skipped=ev_skipped,
+                    linked=linked,
+                    cancelled=cancelled,
+                )
+
+                # 11. Finalize sync log
                 log_stmt = select(SyncLog).where(SyncLog.id == sync_log.id)
                 result = await session.execute(log_stmt)
                 log_record = result.scalar_one()

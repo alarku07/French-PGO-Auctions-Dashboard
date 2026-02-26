@@ -659,6 +659,188 @@ async def scrape_auction_calendar(
     return records
 
 
+_TIME_RE = re.compile(r"^\d{1,2}:\d{2}(?:\s*(?:AM|PM))?$", re.IGNORECASE)
+
+
+def _is_time_only(cell: str) -> bool:
+    return bool(_TIME_RE.match(cell.strip()))
+
+
+def _normalize_time_str(time_str: str) -> str:
+    """Normalize HH:MM or HH:MM AM/PM to HH:MM 24-hour format."""
+    m = re.match(
+        r"^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$", time_str.strip(), re.IGNORECASE
+    )
+    if not m:
+        return time_str
+    h, mins, ampm = int(m.group(1)), m.group(2), m.group(3)
+    if ampm:
+        if ampm.upper() == "PM" and h != 12:
+            h += 12
+        elif ampm.upper() == "AM" and h == 12:
+            h = 0
+    return f"{h:02d}:{mins}"
+
+
+async def scrape_auction_events(
+    eex_base_url: str,
+    http_client: httpx.AsyncClient,
+) -> list[dict[str, Any]]:
+    """Scrape the EEX French Auctions Calendar and return event-level records.
+
+    Returns a deduplicated list of dicts, one per unique future event date,
+    with all 6 calendar columns populated:
+        {
+            "event_date": date,           # date part of order_book_close
+            "is_cancelled": False,
+            "auctioning_month": str | None,
+            "production_month": str | None,
+            "order_book_open": datetime | None,
+            "cash_trading_limits_modification": datetime | None,
+            "order_book_close": datetime | None,
+            "order_matching": datetime | None,
+        }
+    """
+    url = f"{eex_base_url}/en/markets/energy-certificates/french-auctions-power"
+    try:
+        response = await http_client.get(url, follow_redirects=True, timeout=30.0)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.error("event_calendar_fetch_failed", url=url, error=str(exc))
+        raise
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    # thead keyword → datetime field (ordered; first match wins per field)
+    _dt_header_keywords: list[tuple[str, str]] = [
+        ("opening of order book", "order_book_open"),
+        ("order book opening", "order_book_open"),
+        ("order book open", "order_book_open"),
+        ("modification", "cash_trading_limits_modification"),
+        ("closure of order book", "order_book_close"),
+        ("order book closure", "order_book_close"),
+        ("order book close", "order_book_close"),
+        ("order matching", "order_matching"),
+        ("order book matching", "order_matching"),
+    ]
+
+    # sub-header row keyword → string field
+    _str_header_keywords: list[tuple[str, str]] = [
+        ("auctioning month", "auctioning_month"),
+        ("auction month", "auctioning_month"),
+        ("production month", "production_month"),
+        ("production period", "production_month"),
+    ]
+
+    seen_dates: set[date] = set()
+    events: list[dict[str, Any]] = []
+
+    for table in soup.find_all("table"):
+        headers, rows = _extract_table_rows(table)
+
+        # When there is no explicit <thead>, the first tbody/table row IS the
+        # header row — treat it as such and shift the remaining rows down.
+        if not headers and rows:
+            headers = [c.lower() for c in rows[0]]
+            rows = rows[1:]
+
+        # Only process calendar tables (contain order book columns in thead)
+        header_text = " ".join(headers)
+        if "order" not in header_text and "matching" not in header_text:
+            continue
+
+        # Step 1: Determine ordered list of datetime fields from thead.
+        # We only care about the order, not the th-element index, because
+        # a colspan cell in the thead would misalign th indices vs td indices.
+        dt_fields_ordered: list[str] = []
+        seen_dt: set[str] = set()
+        for h in headers:
+            for keyword, field in _dt_header_keywords:
+                if keyword in h and field not in seen_dt:
+                    dt_fields_ordered.append(field)
+                    seen_dt.add(field)
+                    break
+
+        if not dt_fields_ordered or not rows:
+            continue
+
+        # Step 2: Parse rows[0] (sub-header / shared-times row).
+        # This row contains: text labels for the string columns (auctioning_month,
+        # production_month) and HH:MM shared times for the datetime columns.
+        # The actual column indices for BOTH string and datetime fields come
+        # from this row — not from the thead — because a colspan in the thead
+        # would produce a th-list index that doesn't match the td column index.
+        sub_header = rows[0]
+        col_map: dict[str, int] = {}
+        shared_times: dict[str, str] = {}
+        time_indices: list[int] = []
+
+        for i, cell in enumerate(sub_header):
+            stripped = cell.strip()
+            if _is_time_only(stripped):
+                time_indices.append(i)
+            else:
+                cell_lower = stripped.lower()
+                for keyword, field in _str_header_keywords:
+                    if keyword in cell_lower and field not in col_map:
+                        col_map[field] = i
+                        break
+
+        # Pair time cells with datetime fields in positional order;
+        # normalize to 24-hour HH:MM (handles both "16:00" and "4:00 PM").
+        for time_idx, dt_field in zip(time_indices, dt_fields_ordered, strict=False):
+            shared_times[dt_field] = _normalize_time_str(sub_header[time_idx].strip())
+            col_map[dt_field] = time_idx
+
+        if "order_book_close" not in col_map:
+            continue
+
+        # Step 3: Process data rows (everything after the sub-header row)
+        for row in rows[1:]:
+            record: dict[str, Any] = {}
+
+            for dt_field in dt_fields_ordered:
+                if dt_field not in col_map:
+                    record[dt_field] = None
+                    continue
+                idx = col_map[dt_field]
+                date_str = row[idx].strip() if idx < len(row) else ""
+                time_str = shared_times.get(dt_field, "")
+                combined = f"{date_str} {time_str}".strip() if date_str else ""
+                record[dt_field] = _parse_datetime_loose(combined) if combined else None
+
+            # event_date = date part of order_book_close (no time component)
+            if not record.get("order_book_close"):
+                continue
+            event_date = record["order_book_close"].date()
+
+            if event_date in seen_dates:
+                continue
+            seen_dates.add(event_date)
+
+            def _str_col(f: str, r: list[str], cm: dict[str, int]) -> str | None:
+                if f not in cm:
+                    return None
+                v = r[cm[f]].strip() if cm[f] < len(r) else ""
+                return v or None
+
+            events.append({
+                "event_date": event_date,
+                "is_cancelled": False,
+                "auctioning_month": _str_col("auctioning_month", row, col_map),
+                "production_month": _str_col("production_month", row, col_map),
+                "order_book_open": record.get("order_book_open"),
+                "cash_trading_limits_modification": record.get(
+                    "cash_trading_limits_modification"
+                ),
+                "order_book_close": record.get("order_book_close"),
+                "order_matching": record.get("order_matching"),
+            })
+
+    logger.info("scraped_auction_events", count=len(events), url=url)
+    return events
+
+
 def _parse_datetime_loose(value: Any) -> datetime | None:
     """Parse a loose date/datetime string from the EEX calendar table."""
     if value is None:

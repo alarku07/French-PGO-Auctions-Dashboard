@@ -156,3 +156,51 @@ export async function getTechnologies(): Promise<{ data: string[] }> {
   const response = await apiClient.get<{ data: string[] }>("/technologies");
   return response.data;
 }
+
+// ─── AuctionEvent Types ─────────────────────────────────────────────────────
+
+export interface AuctionSummary {
+  id: number;
+  auction_date: string;
+  region: string;
+  production_period: string;
+  technology: string | null;
+  status: "past" | "upcoming";
+}
+
+export interface AuctionEventRecord {
+  id: number;
+  event_date: string;
+  status: "upcoming" | "completed";
+  is_cancelled: boolean;
+  auctioning_month: string | null;
+  production_month: string | null;
+  order_book_open: string | null;
+  cash_trading_limits_modification: string | null;
+  order_book_close: string | null;
+  order_matching: string | null;
+  auctions: AuctionSummary[];
+}
+
+export interface AuctionEventListResponse {
+  data: AuctionEventRecord[];
+  count: number;
+}
+
+export interface AuctionEventParams {
+  include_cancelled?: boolean;
+  start_date?: string;
+  end_date?: string;
+}
+
+// ─── AuctionEvent API Function ──────────────────────────────────────────────
+
+export async function getAuctionEvents(
+  params?: AuctionEventParams,
+): Promise<AuctionEventListResponse> {
+  const response = await apiClient.get<AuctionEventListResponse>(
+    "/auction-events",
+    { params },
+  );
+  return response.data;
+}

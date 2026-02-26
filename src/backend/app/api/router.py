@@ -1,8 +1,11 @@
 from fastapi import APIRouter
 
-from app.api import auctions, stats
+from app.api import auction_events, auctions, stats
 
 api_router = APIRouter(prefix="/api/v1")
+
+# Auction event endpoints
+api_router.include_router(auction_events.router, tags=["auction-events"])
 
 # Auction endpoints
 api_router.include_router(auctions.router, tags=["auctions"])

@@ -4,8 +4,10 @@ import {
   getUpcomingAuctions,
   getStats,
   getRegions,
+  getAuctionEvents,
   type AuctionRecord,
   type UpcomingAuction,
+  type AuctionEventRecord,
   type StatsResponse,
   type Pagination,
   type AuctionParams,
@@ -15,6 +17,7 @@ interface AuctionsState {
   auctions: Ref<AuctionRecord[]>;
   auctionPagination: Ref<Pagination | null>;
   upcoming: Ref<UpcomingAuction[]>;
+  auctionEvents: Ref<AuctionEventRecord[]>;
   stats: Ref<StatsResponse | null>;
   regions: Ref<string[]>;
   isLoading: Ref<boolean>;
@@ -28,6 +31,7 @@ export function useAuctions(): AuctionsState {
   const auctions = ref<AuctionRecord[]>([]);
   const auctionPagination = ref<Pagination | null>(null);
   const upcoming = ref<UpcomingAuction[]>([]);
+  const auctionEvents = ref<AuctionEventRecord[]>([]);
   const stats = ref<StatsResponse | null>(null);
   const regions = ref<string[]>([]);
   const isLoading = ref(false);
@@ -50,12 +54,17 @@ export function useAuctions(): AuctionsState {
   async function fetchAll() {
     isLoading.value = true;
     error.value = null;
+    const year = new Date().getFullYear();
     try {
       await Promise.allSettled([
         fetchAuctions(currentFilter.value),
         getUpcomingAuctions().then((r) => { upcoming.value = r.data; }),
         getStats().then((r) => { stats.value = r; }),
         getRegions().then((r) => { regions.value = r.data; }),
+        getAuctionEvents({
+          start_date: `${year}-01-01`,
+          end_date: `${year}-12-31`,
+        }).then((r) => { auctionEvents.value = r.data; }),
       ]);
     } finally {
       isLoading.value = false;
@@ -76,6 +85,7 @@ export function useAuctions(): AuctionsState {
     auctions,
     auctionPagination,
     upcoming,
+    auctionEvents,
     stats,
     regions,
     isLoading,

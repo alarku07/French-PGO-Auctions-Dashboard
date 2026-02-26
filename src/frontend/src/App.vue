@@ -82,10 +82,10 @@ python -m app.services.sync --backfill</pre>
             />
           </div>
 
-          <!-- Upcoming Auctions -->
+          <!-- Calendar -->
           <div>
-            <h2 class="section-title">Upcoming Auctions</h2>
-            <UpcomingAuctions :auctions="upcoming" :is-loading="isLoading" />
+            <h2 class="section-title">Calendar</h2>
+            <AuctionEventList :events="auctionEvents" :is-loading="isLoading" />
           </div>
         </div>
       </template>
@@ -117,13 +117,13 @@ python -m app.services.sync --backfill</pre>
 import { computed, onMounted } from "vue";
 import { useAuctions } from "@/composables/useAuctions";
 import { useChartData } from "@/composables/useChartData";
+import AuctionEventList from "@/components/AuctionEventList.vue";
 import AuctionTable from "@/components/AuctionTable.vue";
 import DateRangeFilter from "@/components/DateRangeFilter.vue";
 import LastUpdated from "@/components/LastUpdated.vue";
 import PriceChart from "@/components/PriceChart.vue";
 import RegionFilter from "@/components/RegionFilter.vue";
 import StatsPanel from "@/components/StatsPanel.vue";
-import UpcomingAuctions from "@/components/UpcomingAuctions.vue";
 import VolumeChart from "@/components/VolumeChart.vue";
 
 // US1: Dashboard data
@@ -131,6 +131,7 @@ const {
   auctions,
   auctionPagination,
   upcoming,
+  auctionEvents,
   stats,
   regions,
   isLoading,

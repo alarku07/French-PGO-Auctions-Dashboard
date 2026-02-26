@@ -1,22 +1,10 @@
 <template>
   <div class="auction-event-list" aria-label="Auction events">
-    <div class="auction-event-list__toolbar">
-      <label class="toggle-cancelled">
-        <input
-          type="checkbox"
-          :checked="showCancelled"
-          @change="toggleCancelled"
-          aria-label="Show cancelled events"
-        />
-        Show cancelled
-      </label>
-    </div>
-
     <div v-if="isLoading" class="loading-spinner" aria-live="polite" aria-busy="true">
       Loading…
     </div>
 
-    <div v-else-if="visibleEvents.length === 0" class="empty-state" style="padding: 32px 16px;">
+    <div v-else-if="sortedEvents.length === 0" class="empty-state" style="padding: 32px 16px;">
       <p style="color: var(--color-text-secondary); font-style: italic;">
         No auction events found.
       </p>
@@ -24,30 +12,42 @@
 
     <ul v-else class="event-list" role="list">
       <li
-        v-for="event in visibleEvents"
+        v-for="event in sortedEvents"
         :key="event.id"
         class="event-item"
         :class="{ 'event-item--cancelled': event.is_cancelled }"
       >
-        <div class="event-item__header">
+        <!-- Clickable header row -->
+        <div
+          class="event-item__header"
+          role="button"
+          :tabindex="0"
+          :aria-expanded="expandedIds.has(event.id)"
+          @click="toggleExpanded(event.id)"
+          @keydown.enter="toggleExpanded(event.id)"
+          @keydown.space.prevent="toggleExpanded(event.id)"
+        >
           <span class="event-item__title">
             {{ event.auctioning_month ?? formatDate(event.event_date) }}
           </span>
-          <span
-            class="event-item__status-badge"
-            :class="statusBadgeClass(event)"
-            aria-label="Event status"
-          >
-            {{ event.is_cancelled ? "Cancelled" : capitalize(event.status) }}
-          </span>
+          <div class="event-item__header-right">
+            <span
+              class="event-item__status-badge"
+              :class="statusBadgeClass(event)"
+              aria-label="Event status"
+            >
+              {{ event.is_cancelled ? "Cancelled" : capitalize(event.status) }}
+            </span>
+            <span
+              class="event-item__chevron"
+              :class="{ 'event-item__chevron--open': expandedIds.has(event.id) }"
+              aria-hidden="true"
+            >▾</span>
+          </div>
         </div>
 
-        <p class="event-item__subtitle">
-          Closure: {{ formatDate(event.event_date) }}
-        </p>
-
-        <details class="event-item__details">
-          <summary class="event-item__details-summary">Calendar details</summary>
+        <!-- Expanded details -->
+        <div v-show="expandedIds.has(event.id)" class="event-item__expanded">
           <dl class="event-item__details-list">
             <template v-if="event.production_month">
               <dt>Production month</dt>
@@ -70,36 +70,7 @@
               <dd>{{ formatDatetime(event.order_matching) }}</dd>
             </template>
           </dl>
-        </details>
-
-        <table
-          v-if="event.auctions.length > 0"
-          class="event-item__auctions"
-          aria-label="Auctions in this event"
-        >
-          <thead>
-            <tr>
-              <th scope="col">Region</th>
-              <th scope="col">Production Period</th>
-              <th scope="col">Technology</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="auction in event.auctions"
-              :key="auction.id"
-              class="auction-row"
-            >
-              <td>{{ auction.region }}</td>
-              <td>{{ auction.production_period }}</td>
-              <td>{{ auction.technology ?? "—" }}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <p v-else class="event-item__no-auctions">
-          No individual auctions scheduled yet.
-        </p>
+        </div>
       </li>
     </ul>
   </div>
@@ -116,21 +87,20 @@ interface Props {
 
 const props = defineProps<Props>();
 
-const emit = defineEmits<{
-  "toggle-cancelled": [showCancelled: boolean];
-}>();
+const expandedIds = ref(new Set<number>());
 
-const showCancelled = ref(false);
-
-const visibleEvents = computed(() =>
-  showCancelled.value
-    ? props.events
-    : props.events.filter((e) => !e.is_cancelled),
+const sortedEvents = computed(() =>
+  [...props.events].sort((a, b) => a.event_date.localeCompare(b.event_date)),
 );
 
-function toggleCancelled(event: Event): void {
-  showCancelled.value = (event.target as HTMLInputElement).checked;
-  emit("toggle-cancelled", showCancelled.value);
+function toggleExpanded(id: number): void {
+  const next = new Set(expandedIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  expandedIds.value = next;
 }
 
 function formatDate(dateStr: string): string {
@@ -170,42 +140,20 @@ function statusBadgeClass(event: AuctionEventRecord): string {
   width: 100%;
 }
 
-.auction-event-list__toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.toggle-cancelled {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary, #757575);
-  user-select: none;
-}
-
-.toggle-cancelled input[type="checkbox"] {
-  cursor: pointer;
-}
-
 .event-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .event-item {
   border: 1px solid var(--color-border, #e0e0e0);
   border-radius: 6px;
-  padding: 16px;
   background: var(--color-surface, #fff);
+  overflow: hidden;
 }
 
 .event-item--cancelled {
@@ -213,12 +161,32 @@ function statusBadgeClass(event: AuctionEventRecord): string {
   border-color: var(--color-danger, #d32f2f);
 }
 
+/* Clickable header row */
 .event-item__header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
   gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+  transition: background 0.15s;
+}
+
+.event-item__header:hover {
+  background: var(--color-table-row-hover, #f0f7f0);
+}
+
+.event-item__header:focus-visible {
+  outline: 2px solid var(--color-accent, #1976d2);
+  outline-offset: -2px;
+}
+
+.event-item__header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .event-item__title {
@@ -226,29 +194,30 @@ function statusBadgeClass(event: AuctionEventRecord): string {
   font-size: 1rem;
 }
 
-.event-item__subtitle {
-  font-size: 0.8rem;
+.event-item__chevron {
+  font-size: 1.1rem;
   color: var(--color-text-secondary, #757575);
-  margin: 0 0 8px;
+  transition: transform 0.2s ease;
+  display: inline-block;
+  line-height: 1;
 }
 
-.event-item__details {
-  margin-bottom: 12px;
+.event-item__chevron--open {
+  transform: rotate(180deg);
 }
 
-.event-item__details-summary {
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--color-text-secondary, #757575);
-  user-select: none;
+/* Expanded section */
+.event-item__expanded {
+  border-top: 1px solid var(--color-border, #e0e0e0);
+  padding: 16px;
 }
 
 .event-item__details-list {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 8px 0 0;
-  font-size: 0.8rem;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 0.875rem;
 }
 
 .event-item__details-list dt {
@@ -283,48 +252,4 @@ function statusBadgeClass(event: AuctionEventRecord): string {
   color: #d32f2f;
 }
 
-.event-item__auctions {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.event-item__auctions th,
-.event-item__auctions td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--color-border, #e0e0e0);
-}
-
-.event-item__auctions th {
-  color: var(--color-text-secondary, #757575);
-  font-weight: 500;
-}
-
-.event-item__no-auctions {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary, #757575);
-  font-style: italic;
-  margin: 0;
-}
-
-/* ─── Responsive (mobile-first) ─────────────────────────────────────────── */
-@media (max-width: 480px) {
-  .event-item__auctions thead {
-    display: none;
-  }
-
-  .event-item__auctions tbody,
-  .event-item__auctions tr,
-  .event-item__auctions td {
-    display: block;
-    width: 100%;
-  }
-
-  .event-item__auctions td::before {
-    content: attr(data-label) ": ";
-    font-weight: 500;
-    color: var(--color-text-secondary, #757575);
-  }
-}
 </style>

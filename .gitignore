@@ -45,7 +45,9 @@ data/downloads/
 # Windows
 Thumbs.db
 
+# AI clients
+.claude/settings.local.json
+
 # Misc (original planning file)
 initital task.pdf
-specify_prompt
 blackboard.md

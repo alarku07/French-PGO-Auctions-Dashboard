@@ -12,7 +12,11 @@ from app.config import settings
 from app.database import engine
 from app.middleware import RequestLoggingMiddleware, configure_logging
 from app.middleware.security import SecurityHeadersMiddleware
-from app.models import Auction, SyncLog  # noqa: F401 — ensure models are registered
+from app.models import (  # noqa: F401 — ensure models are registered
+    Auction,
+    AuctionEvent,
+    SyncLog,
+)
 
 configure_logging(settings.log_level)
 logger = structlog.get_logger("pgo-api")

@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     Numeric,
@@ -12,9 +16,12 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.auction_event import AuctionEvent
 
 
 class Auction(Base):
@@ -56,6 +63,16 @@ class Auction(Base):
     )
     order_matching: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # AuctionEvent association (nullable — historical records pre-feature have no event)
+    auction_event_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("auction_event.id"), nullable=True
+    )
+    auction_event: Mapped[AuctionEvent | None] = relationship(
+        "AuctionEvent",
+        back_populates="auctions",
+        lazy="select",
     )
 
     # Timestamps
@@ -108,6 +125,7 @@ class Auction(Base):
             "production_period",
             "technology",
         ),
+        Index("idx_auction_event_id", "auction_event_id"),
     )
 
     def __repr__(self) -> str:

@@ -5,7 +5,7 @@ GET /api/v1/auction-events — list auction events with associated auctions
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import distinct, extract, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -14,6 +14,7 @@ from app.models.auction_event import AuctionEvent
 from app.schemas.auction_event import (
     AuctionEventListResponse,
     AuctionEventResponse,
+    AuctionEventYearsResponse,
     AuctionSummary,
 )
 
@@ -43,6 +44,25 @@ def _parse_date(value: str | None, param_name: str) -> date | None:
 def _compute_status(event_date: date) -> str:
     """Compute display status from the event date relative to today."""
     return "upcoming" if event_date >= date.today() else "completed"
+
+
+@router.get(
+    "/auction-events/years",
+    response_model=AuctionEventYearsResponse,
+    summary="List years that have auction events",
+)
+async def list_auction_event_years(
+    session: AsyncSession = Depends(get_session),  # noqa: B008
+) -> AuctionEventYearsResponse:
+    stmt = select(
+        distinct(extract("year", AuctionEvent.event_date))
+    )
+    result = await session.execute(stmt)
+    years = sorted(
+        {int(float(row)) for row in result.scalars().all()},
+        reverse=True,
+    )
+    return AuctionEventYearsResponse(data=years)
 
 
 @router.get(

@@ -1,13 +1,5 @@
 <template>
   <div class="auction-table-wrapper">
-    <!-- Date range filter -->
-    <DateRangeFilter
-      :start-date="localStartDate"
-      :end-date="localEndDate"
-      label-prefix="Auction"
-      @change="onDateChange"
-    />
-
     <!-- Loading -->
     <div v-if="isLoading" class="loading-spinner" aria-live="polite" aria-busy="true">Loading…</div>
 
@@ -86,9 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
 import type { AuctionRecord, Pagination } from "@/services/api";
-import DateRangeFilter from "@/components/DateRangeFilter.vue";
 
 interface Props {
   auctions: AuctionRecord[];
@@ -96,32 +86,11 @@ interface Props {
   isLoading: boolean;
 }
 
-interface FilterChange {
-  start_date?: string;
-  end_date?: string;
-}
-
 defineProps<Props>();
 
 const emit = defineEmits<{
-  "filter-change": [FilterChange];
   "page-change": [number];
 }>();
-
-// Default: previous calendar month
-const today = new Date();
-const firstOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-const lastOfPrev = new Date(firstOfThisMonth.getTime() - 86_400_000);
-const firstOfPrev = new Date(lastOfPrev.getFullYear(), lastOfPrev.getMonth(), 1);
-
-const localStartDate = ref(firstOfPrev.toISOString().slice(0, 10));
-const localEndDate = ref(lastOfPrev.toISOString().slice(0, 10));
-
-function onDateChange(event: FilterChange) {
-  localStartDate.value = event.start_date ?? "";
-  localEndDate.value = event.end_date ?? "";
-  emit("filter-change", event);
-}
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr + "T00:00:00Z").toLocaleDateString("en-GB", {
@@ -149,9 +118,5 @@ function formatPrice(value: number): string {
 .text-muted {
   color: var(--color-text-muted);
   font-style: italic;
-}
-
-.auction-table-wrapper :deep(.date-range-filter) {
-  margin-bottom: var(--space-4);
 }
 </style>

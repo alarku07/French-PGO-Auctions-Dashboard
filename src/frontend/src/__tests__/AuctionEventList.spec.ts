@@ -1,7 +1,6 @@
 /**
  * T006/T007 — Unit tests for AuctionEventList component (US1).
- * T019 — Status badge tests and cancelled-toggle tests (US3).
- * Verifies rendering of events, nested auctions, status badges, and empty state.
+ * Verifies rendering of events, status badges, sorting, and empty state.
  */
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
@@ -84,14 +83,14 @@ const cancelledEvent: AuctionEventRecord = {
 describe("AuctionEventList", () => {
   it("shows loading spinner when isLoading is true", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [], isLoading: true },
+      props: { events: [], isLoading: true, availableYears: [] },
     });
     expect(wrapper.find(".loading-spinner").exists()).toBe(true);
   });
 
   it("shows empty state when no events and not loading", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [], isLoading: false },
+      props: { events: [], isLoading: false, availableYears: [2026, 2025] },
     });
     expect(wrapper.find(".empty-state").exists()).toBe(true);
     expect(wrapper.text()).toContain("No auction events found");
@@ -99,7 +98,7 @@ describe("AuctionEventList", () => {
 
   it("renders the event list when events are provided", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent], isLoading: false },
+      props: { events: [upcomingEvent], isLoading: false, availableYears: [2026] },
     });
     expect(wrapper.find(".event-list").exists()).toBe(true);
     expect(wrapper.findAll(".event-item").length).toBe(1);
@@ -107,7 +106,7 @@ describe("AuctionEventList", () => {
 
   it("displays the event title (auctioning_month or date)", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent], isLoading: false },
+      props: { events: [upcomingEvent], isLoading: false, availableYears: [2026] },
     });
     expect(wrapper.find(".event-item__title").exists()).toBe(true);
     expect(wrapper.find(".event-item__title").text()).toContain("March 2026");
@@ -115,7 +114,7 @@ describe("AuctionEventList", () => {
 
   it("shows 'Upcoming' badge for a future event", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent], isLoading: false },
+      props: { events: [upcomingEvent], isLoading: false, availableYears: [2026] },
     });
     const badge = wrapper.find(".event-item__status-badge");
     expect(badge.exists()).toBe(true);
@@ -125,131 +124,43 @@ describe("AuctionEventList", () => {
 
   it("shows 'Completed' badge for a past event", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [completedEvent], isLoading: false },
+      props: { events: [completedEvent], isLoading: false, availableYears: [2026] },
     });
     const badge = wrapper.find(".event-item__status-badge");
     expect(badge.text()).toBe("Completed");
     expect(badge.classes()).toContain("event-item__status-badge--completed");
   });
 
-  it("shows 'Cancelled' badge for a cancelled event when showCancelled is on", async () => {
+  it("shows 'Cancelled' badge for a cancelled event", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [cancelledEvent], isLoading: false },
+      props: { events: [cancelledEvent], isLoading: false, availableYears: [2026] },
     });
-    const toggle = wrapper.find('input[type="checkbox"]');
-    await toggle.setValue(true);
-    await toggle.trigger("change");
-
     const badge = wrapper.find(".event-item__status-badge");
     expect(badge.text()).toBe("Cancelled");
     expect(badge.classes()).toContain("event-item__status-badge--cancelled");
   });
 
-  it("renders nested auction rows", () => {
+  it("renders multiple events with different statuses", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent], isLoading: false },
+      props: { events: [upcomingEvent, completedEvent, cancelledEvent], isLoading: false, availableYears: [2026] },
     });
-    expect(wrapper.findAll(".auction-row").length).toBe(2);
-    expect(wrapper.text()).toContain("Grand Est");
-    expect(wrapper.text()).toContain("Bretagne");
-  });
-
-  it("shows 'no auctions' message when event has no auctions", () => {
-    const wrapper = mount(AuctionEventList, {
-      props: { events: [completedEvent], isLoading: false },
-    });
-    expect(wrapper.find(".event-item__no-auctions").exists()).toBe(true);
-  });
-
-  it("renders multiple events when showCancelled is on", async () => {
-    const wrapper = mount(AuctionEventList, {
-      props: {
-        events: [upcomingEvent, completedEvent, cancelledEvent],
-        isLoading: false,
-      },
-    });
-    const toggle = wrapper.find('input[type="checkbox"]');
-    await toggle.setValue(true);
-    await toggle.trigger("change");
-
     expect(wrapper.findAll(".event-item").length).toBe(3);
   });
 
   it("has accessible aria-label on container", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [], isLoading: false },
+      props: { events: [], isLoading: false, availableYears: [2026, 2025] },
     });
     expect(wrapper.attributes("aria-label")).toBe("Auction events");
   });
 
-  // ─── T019: Toggle-cancelled tests (US3) ──────────────────────────────────
-
-  it("excludes cancelled events by default (showCancelled=false)", () => {
+  it("orders events by event_date ascending", () => {
     const wrapper = mount(AuctionEventList, {
-      props: {
-        events: [upcomingEvent, cancelledEvent],
-        isLoading: false,
-      },
+      props: { events: [upcomingEvent, completedEvent], isLoading: false, availableYears: [2026] },
     });
-    // Only the non-cancelled event should appear
-    expect(wrapper.findAll(".event-item").length).toBe(1);
-    const badges = wrapper.findAll(".event-item__status-badge");
-    expect(badges.every((b) => b.text() !== "Cancelled")).toBe(true);
-  });
-
-  it("renders the 'Show cancelled' toggle checkbox", () => {
-    const wrapper = mount(AuctionEventList, {
-      props: { events: [], isLoading: false },
-    });
-    const toggle = wrapper.find('input[type="checkbox"]');
-    expect(toggle.exists()).toBe(true);
-    expect(toggle.attributes("aria-label")).toBe("Show cancelled events");
-  });
-
-  it("shows cancelled events after toggling 'Show cancelled' on", async () => {
-    const wrapper = mount(AuctionEventList, {
-      props: {
-        events: [upcomingEvent, cancelledEvent],
-        isLoading: false,
-      },
-    });
-
-    const toggle = wrapper.find('input[type="checkbox"]');
-    await toggle.setValue(true);
-    await toggle.trigger("change");
-
-    expect(wrapper.findAll(".event-item").length).toBe(2);
-    const badges = wrapper.findAll(".event-item__status-badge");
-    const texts = badges.map((b) => b.text());
-    expect(texts).toContain("Cancelled");
-  });
-
-  it("emits 'toggle-cancelled' with true when toggled on", async () => {
-    const wrapper = mount(AuctionEventList, {
-      props: { events: [cancelledEvent], isLoading: false },
-    });
-
-    const toggle = wrapper.find('input[type="checkbox"]');
-    await toggle.setValue(true);
-    await toggle.trigger("change");
-
-    expect(wrapper.emitted("toggle-cancelled")).toBeTruthy();
-    expect(wrapper.emitted("toggle-cancelled")![0]).toEqual([true]);
-  });
-
-  it("emits 'toggle-cancelled' with false when toggled off", async () => {
-    const wrapper = mount(AuctionEventList, {
-      props: { events: [cancelledEvent], isLoading: false },
-    });
-
-    // Toggle on, then off
-    const toggle = wrapper.find('input[type="checkbox"]');
-    await toggle.setValue(true);
-    await toggle.trigger("change");
-    await toggle.setValue(false);
-    await toggle.trigger("change");
-
-    const emitted = wrapper.emitted("toggle-cancelled")!;
-    expect(emitted[emitted.length - 1]).toEqual([false]);
+    const titles = wrapper.findAll(".event-item__title").map((el) => el.text());
+    // completedEvent has pastDate (earlier), upcomingEvent has futureDate (later)
+    expect(titles[0]).toContain(completedEvent.event_date.slice(0, 4));
+    expect(titles[1]).toContain("March 2026");
   });
 });

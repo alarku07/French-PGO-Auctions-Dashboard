@@ -77,15 +77,19 @@ python -m app.services.sync --backfill</pre>
               :auctions="auctions"
               :pagination="auctionPagination"
               :is-loading="isLoading"
-              @filter-change="updateAuctionFilter"
               @page-change="updateAuctionPage"
             />
           </div>
 
-          <!-- Upcoming Auctions -->
+          <!-- Calendar -->
           <div>
-            <h2 class="section-title">Upcoming Auctions</h2>
-            <UpcomingAuctions :auctions="upcoming" :is-loading="isLoading" />
+            <h2 class="section-title">Calendar</h2>
+            <AuctionEventList
+              :events="auctionEvents"
+              :is-loading="isLoading"
+              :available-years="auctionEventYears"
+              @year-change="updateAuctionEventsYear"
+            />
           </div>
         </div>
       </template>
@@ -114,16 +118,16 @@ python -m app.services.sync --backfill</pre>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useAuctions } from "@/composables/useAuctions";
 import { useChartData } from "@/composables/useChartData";
+import AuctionEventList from "@/components/AuctionEventList.vue";
 import AuctionTable from "@/components/AuctionTable.vue";
 import DateRangeFilter from "@/components/DateRangeFilter.vue";
 import LastUpdated from "@/components/LastUpdated.vue";
 import PriceChart from "@/components/PriceChart.vue";
 import RegionFilter from "@/components/RegionFilter.vue";
 import StatsPanel from "@/components/StatsPanel.vue";
-import UpcomingAuctions from "@/components/UpcomingAuctions.vue";
 import VolumeChart from "@/components/VolumeChart.vue";
 
 // US1: Dashboard data
@@ -131,6 +135,8 @@ const {
   auctions,
   auctionPagination,
   upcoming,
+  auctionEvents,
+  auctionEventYears,
   stats,
   regions,
   isLoading,
@@ -138,6 +144,7 @@ const {
   fetchAll,
   updateAuctionFilter,
   updateAuctionPage,
+  updateAuctionEventsYear,
 } = useAuctions();
 
 // US2: Chart data
@@ -158,6 +165,15 @@ const isEmpty = computed(
     upcoming.value.length === 0 &&
     stats.value?.total_auctions_held === 0,
 );
+
+// Sync shared chart filters → auction table filter
+watch(chartFilters, (filters) => {
+  updateAuctionFilter({
+    start_date: filters.startDate ?? undefined,
+    end_date: filters.endDate ?? undefined,
+    region: filters.region ?? undefined,
+  });
+});
 
 onMounted(() => {
   fetchAll();

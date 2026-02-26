@@ -65,3 +65,11 @@ function emitChange() {
   });
 }
 </script>
+
+<style scoped>
+.date-range-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+</style>

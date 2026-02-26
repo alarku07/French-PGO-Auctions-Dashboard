@@ -1,5 +1,19 @@
 <template>
   <div class="auction-event-list" aria-label="Auction events">
+    <div class="calendar-toolbar">
+      <div class="filter-group">
+        <label for="calendar-year" class="form-label">Year</label>
+        <select
+          id="calendar-year"
+          v-model="selectedYear"
+          class="form-control"
+          @change="onYearChange"
+        >
+          <option v-for="year in availableYears" :key="year" :value="year">{{ year }}</option>
+        </select>
+      </div>
+    </div>
+
     <div v-if="isLoading" class="loading-spinner" aria-live="polite" aria-busy="true">
       Loading…
     </div>
@@ -83,9 +97,21 @@ import type { AuctionEventRecord } from "@/services/api";
 interface Props {
   events: AuctionEventRecord[];
   isLoading: boolean;
+  availableYears: number[];
 }
 
 const props = defineProps<Props>();
+
+const emit = defineEmits<{
+  "year-change": [year: number];
+}>();
+
+const currentYear = new Date().getFullYear();
+const selectedYear = ref(currentYear);
+
+function onYearChange() {
+  emit("year-change", selectedYear.value);
+}
 
 const expandedIds = ref(new Set<number>());
 
@@ -138,6 +164,10 @@ function statusBadgeClass(event: AuctionEventRecord): string {
 <style scoped>
 .auction-event-list {
   width: 100%;
+}
+
+.calendar-toolbar {
+  margin-bottom: 16px;
 }
 
 .event-list {

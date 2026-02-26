@@ -187,6 +187,10 @@ export interface AuctionEventListResponse {
   count: number;
 }
 
+export interface AuctionEventYearsResponse {
+  data: number[];
+}
+
 export interface AuctionEventParams {
   include_cancelled?: boolean;
   start_date?: string;
@@ -202,5 +206,10 @@ export async function getAuctionEvents(
     "/auction-events",
     { params },
   );
+  return response.data;
+}
+
+export async function getAuctionEventYears(): Promise<AuctionEventYearsResponse> {
+  const response = await apiClient.get<AuctionEventYearsResponse>("/auction-events/years");
   return response.data;
 }

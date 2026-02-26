@@ -1,4 +1,4 @@
-"""Unit tests for GET /api/v1/auction-events endpoint (US1).
+"""Unit tests for GET /api/v1/auction-events and /auction-events/years endpoints (US1).
 
 Uses an in-memory SQLite database (see conftest.py). Verifies:
 - Empty DB returns 200 with empty list
@@ -250,3 +250,31 @@ async def test_events_sorted_descending_by_date(
     assert response.status_code == 200
     returned_dates = [e["event_date"] for e in response.json()["data"]]
     assert returned_dates == sorted(returned_dates, reverse=True)
+
+
+# ─── /auction-events/years ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_years_empty_db_returns_empty_list(client: AsyncClient) -> None:
+    """Empty DB returns 200 with empty years list."""
+    response = await client.get("/api/v1/auction-events/years")
+    assert response.status_code == 200
+    assert response.json() == {"data": []}
+
+
+@pytest.mark.asyncio
+async def test_years_returns_distinct_years_descending(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Returns distinct years from event_date, sorted descending."""
+    await _seed_event(db_session, date(2024, 3, 15))
+    await _seed_event(db_session, date(2025, 6, 10))
+    await _seed_event(db_session, date(2025, 11, 20))  # same year as above
+    await _seed_event(db_session, date(2026, 1, 8))
+    await db_session.commit()
+
+    response = await client.get("/api/v1/auction-events/years")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data == [2026, 2025, 2024]  # distinct, descending

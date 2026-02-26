@@ -83,14 +83,14 @@ const cancelledEvent: AuctionEventRecord = {
 describe("AuctionEventList", () => {
   it("shows loading spinner when isLoading is true", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [], isLoading: true },
+      props: { events: [], isLoading: true, availableYears: [] },
     });
     expect(wrapper.find(".loading-spinner").exists()).toBe(true);
   });
 
   it("shows empty state when no events and not loading", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [], isLoading: false },
+      props: { events: [], isLoading: false, availableYears: [2026, 2025] },
     });
     expect(wrapper.find(".empty-state").exists()).toBe(true);
     expect(wrapper.text()).toContain("No auction events found");
@@ -98,7 +98,7 @@ describe("AuctionEventList", () => {
 
   it("renders the event list when events are provided", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent], isLoading: false },
+      props: { events: [upcomingEvent], isLoading: false, availableYears: [2026] },
     });
     expect(wrapper.find(".event-list").exists()).toBe(true);
     expect(wrapper.findAll(".event-item").length).toBe(1);
@@ -106,7 +106,7 @@ describe("AuctionEventList", () => {
 
   it("displays the event title (auctioning_month or date)", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent], isLoading: false },
+      props: { events: [upcomingEvent], isLoading: false, availableYears: [2026] },
     });
     expect(wrapper.find(".event-item__title").exists()).toBe(true);
     expect(wrapper.find(".event-item__title").text()).toContain("March 2026");
@@ -114,7 +114,7 @@ describe("AuctionEventList", () => {
 
   it("shows 'Upcoming' badge for a future event", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent], isLoading: false },
+      props: { events: [upcomingEvent], isLoading: false, availableYears: [2026] },
     });
     const badge = wrapper.find(".event-item__status-badge");
     expect(badge.exists()).toBe(true);
@@ -124,7 +124,7 @@ describe("AuctionEventList", () => {
 
   it("shows 'Completed' badge for a past event", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [completedEvent], isLoading: false },
+      props: { events: [completedEvent], isLoading: false, availableYears: [2026] },
     });
     const badge = wrapper.find(".event-item__status-badge");
     expect(badge.text()).toBe("Completed");
@@ -133,7 +133,7 @@ describe("AuctionEventList", () => {
 
   it("shows 'Cancelled' badge for a cancelled event", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [cancelledEvent], isLoading: false },
+      props: { events: [cancelledEvent], isLoading: false, availableYears: [2026] },
     });
     const badge = wrapper.find(".event-item__status-badge");
     expect(badge.text()).toBe("Cancelled");
@@ -142,21 +142,21 @@ describe("AuctionEventList", () => {
 
   it("renders multiple events with different statuses", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent, completedEvent, cancelledEvent], isLoading: false },
+      props: { events: [upcomingEvent, completedEvent, cancelledEvent], isLoading: false, availableYears: [2026] },
     });
     expect(wrapper.findAll(".event-item").length).toBe(3);
   });
 
   it("has accessible aria-label on container", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [], isLoading: false },
+      props: { events: [], isLoading: false, availableYears: [2026, 2025] },
     });
     expect(wrapper.attributes("aria-label")).toBe("Auction events");
   });
 
   it("orders events by event_date ascending", () => {
     const wrapper = mount(AuctionEventList, {
-      props: { events: [upcomingEvent, completedEvent], isLoading: false },
+      props: { events: [upcomingEvent, completedEvent], isLoading: false, availableYears: [2026] },
     });
     const titles = wrapper.findAll(".event-item__title").map((el) => el.text());
     // completedEvent has pastDate (earlier), upcomingEvent has futureDate (later)

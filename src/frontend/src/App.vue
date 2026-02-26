@@ -77,7 +77,6 @@ python -m app.services.sync --backfill</pre>
               :auctions="auctions"
               :pagination="auctionPagination"
               :is-loading="isLoading"
-              @filter-change="updateAuctionFilter"
               @page-change="updateAuctionPage"
             />
           </div>
@@ -85,7 +84,12 @@ python -m app.services.sync --backfill</pre>
           <!-- Calendar -->
           <div>
             <h2 class="section-title">Calendar</h2>
-            <AuctionEventList :events="auctionEvents" :is-loading="isLoading" />
+            <AuctionEventList
+              :events="auctionEvents"
+              :is-loading="isLoading"
+              :available-years="auctionEventYears"
+              @year-change="updateAuctionEventsYear"
+            />
           </div>
         </div>
       </template>
@@ -114,7 +118,7 @@ python -m app.services.sync --backfill</pre>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useAuctions } from "@/composables/useAuctions";
 import { useChartData } from "@/composables/useChartData";
 import AuctionEventList from "@/components/AuctionEventList.vue";
@@ -132,6 +136,7 @@ const {
   auctionPagination,
   upcoming,
   auctionEvents,
+  auctionEventYears,
   stats,
   regions,
   isLoading,
@@ -139,6 +144,7 @@ const {
   fetchAll,
   updateAuctionFilter,
   updateAuctionPage,
+  updateAuctionEventsYear,
 } = useAuctions();
 
 // US2: Chart data
@@ -159,6 +165,15 @@ const isEmpty = computed(
     upcoming.value.length === 0 &&
     stats.value?.total_auctions_held === 0,
 );
+
+// Sync shared chart filters → auction table filter
+watch(chartFilters, (filters) => {
+  updateAuctionFilter({
+    start_date: filters.startDate ?? undefined,
+    end_date: filters.endDate ?? undefined,
+    region: filters.region ?? undefined,
+  });
+});
 
 onMounted(() => {
   fetchAll();

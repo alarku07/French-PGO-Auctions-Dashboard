@@ -5,6 +5,7 @@ import {
   getStats,
   getRegions,
   getAuctionEvents,
+  getAuctionEventYears,
   type AuctionRecord,
   type UpcomingAuction,
   type AuctionEventRecord,
@@ -18,13 +19,15 @@ interface AuctionsState {
   auctionPagination: Ref<Pagination | null>;
   upcoming: Ref<UpcomingAuction[]>;
   auctionEvents: Ref<AuctionEventRecord[]>;
+  auctionEventYears: Ref<number[]>;
   stats: Ref<StatsResponse | null>;
   regions: Ref<string[]>;
   isLoading: Ref<boolean>;
   error: Ref<string | null>;
   fetchAll: () => Promise<void>;
-  updateAuctionFilter: (filter: { start_date?: string; end_date?: string }) => void;
+  updateAuctionFilter: (filter: { start_date?: string; end_date?: string; region?: string }) => void;
   updateAuctionPage: (page: number) => void;
+  updateAuctionEventsYear: (year: number) => void;
 }
 
 export function useAuctions(): AuctionsState {
@@ -32,6 +35,7 @@ export function useAuctions(): AuctionsState {
   const auctionPagination = ref<Pagination | null>(null);
   const upcoming = ref<UpcomingAuction[]>([]);
   const auctionEvents = ref<AuctionEventRecord[]>([]);
+  const auctionEventYears = ref<number[]>([]);
   const stats = ref<StatsResponse | null>(null);
   const regions = ref<string[]>([]);
   const isLoading = ref(false);
@@ -65,13 +69,14 @@ export function useAuctions(): AuctionsState {
           start_date: `${year}-01-01`,
           end_date: `${year}-12-31`,
         }).then((r) => { auctionEvents.value = r.data; }),
+        getAuctionEventYears().then((r) => { auctionEventYears.value = r.data; }),
       ]);
     } finally {
       isLoading.value = false;
     }
   }
 
-  function updateAuctionFilter(filter: { start_date?: string; end_date?: string }) {
+  function updateAuctionFilter(filter: { start_date?: string; end_date?: string; region?: string }) {
     currentFilter.value = { ...currentFilter.value, ...filter, page: 1 };
     fetchAuctions(currentFilter.value);
   }
@@ -81,11 +86,24 @@ export function useAuctions(): AuctionsState {
     fetchAuctions(currentFilter.value);
   }
 
+  async function updateAuctionEventsYear(year: number) {
+    try {
+      const response = await getAuctionEvents({
+        start_date: `${year}-01-01`,
+        end_date: `${year}-12-31`,
+      });
+      auctionEvents.value = response.data;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   return {
     auctions,
     auctionPagination,
     upcoming,
     auctionEvents,
+    auctionEventYears,
     stats,
     regions,
     isLoading,
@@ -93,5 +111,6 @@ export function useAuctions(): AuctionsState {
     fetchAll,
     updateAuctionFilter,
     updateAuctionPage,
+    updateAuctionEventsYear,
   };
 }

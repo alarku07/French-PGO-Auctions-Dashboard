@@ -45,3 +45,7 @@ class AuctionEventResponse(BaseModel):
 class AuctionEventListResponse(BaseModel):
     data: list[AuctionEventResponse]
     count: int
+
+
+class AuctionEventYearsResponse(BaseModel):
+    data: list[int]

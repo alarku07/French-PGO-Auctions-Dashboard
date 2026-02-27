@@ -42,7 +42,7 @@ export function useAuctions(): AuctionsState {
   const error = ref<string | null>(null);
 
   // Current auction table filter state
-  const currentFilter = ref<AuctionParams>({});
+  const currentFilter = ref<AuctionParams>({ page_size: 24 });
 
   async function fetchAuctions(params?: AuctionParams) {
     try {

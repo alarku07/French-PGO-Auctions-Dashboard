@@ -24,33 +24,70 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="a in auctions" :key="a.id">
-              <td data-label="Auction Date">{{ formatDate(a.auction_date) }}</td>
-              <td data-label="Region">{{ a.region }}</td>
-              <td data-label="Vol. Offered (MWh)" class="text-right">
-                {{ formatNumber(a.volume_offered_mwh) }}
-              </td>
-              <td data-label="Vol. Awarded (MWh)" class="text-right">
-                {{ formatNumber(a.volume_allocated_mwh) }}
-              </td>
-              <td data-label="Avg. Price (EUR/MWh)" class="text-right">
-                <span v-if="a.weighted_avg_price_eur != null">
-                  {{ formatPrice(a.weighted_avg_price_eur) }}
-                </span>
-                <span v-else class="text-muted">Not yet published</span>
-              </td>
-            </tr>
+            <template v-for="a in auctions" :key="a.id">
+              <!-- Aggregate row -->
+              <tr
+                class="auction-row"
+                :class="{ 'auction-row--expandable': (a.technology_rows?.length ?? 0) > 0 }"
+                @click="(a.technology_rows?.length ?? 0) > 0 && toggleRow(a.id)"
+              >
+                <td data-label="Auction Date">
+                  <span
+                    v-if="(a.technology_rows?.length ?? 0) > 0"
+                    class="expand-icon"
+                    aria-hidden="true"
+                  >{{ expandedIds.has(a.id) ? '▼' : '▶' }}</span>
+                  {{ formatDate(a.auction_date) }}
+                </td>
+                <td data-label="Region">{{ a.region }}</td>
+                <td data-label="Vol. Offered (MWh)" class="text-right">
+                  {{ formatNumber(a.volume_offered_mwh) }}
+                </td>
+                <td data-label="Vol. Awarded (MWh)" class="text-right">
+                  {{ formatNumber(a.volume_allocated_mwh) }}
+                </td>
+                <td data-label="Avg. Price (EUR/MWh)" class="text-right">
+                  <span v-if="a.weighted_avg_price_eur != null">
+                    {{ formatPrice(a.weighted_avg_price_eur) }}
+                  </span>
+                  <span v-else class="text-muted">Not yet published</span>
+                </td>
+              </tr>
+
+              <!-- Per-technology sub-rows (expanded) -->
+              <template v-if="expandedIds.has(a.id) && a.technology_rows?.length">
+                <tr
+                  v-for="t in a.technology_rows"
+                  :key="t.id"
+                  class="auction-row--tech"
+                >
+                  <td data-label="Technology" class="tech-cell">↳ {{ t.technology }}</td>
+                  <td></td>
+                  <td data-label="Vol. Offered (MWh)" class="text-right">
+                    {{ formatNumber(t.volume_offered_mwh) }}
+                  </td>
+                  <td data-label="Vol. Awarded (MWh)" class="text-right">
+                    {{ formatNumber(t.volume_allocated_mwh) }}
+                  </td>
+                  <td data-label="Avg. Price (EUR/MWh)" class="text-right">
+                    <span v-if="t.weighted_avg_price_eur != null">
+                      {{ formatPrice(t.weighted_avg_price_eur) }}
+                    </span>
+                    <span v-else class="text-muted">Not yet published</span>
+                  </td>
+                </tr>
+              </template>
+            </template>
           </tbody>
         </table>
       </div>
 
       <!-- Pagination -->
       <div
-        v-if="pagination && pagination.total_pages > 1"
-        class="pagination"
+        v-if="pagination"
+        class="pagination-bar"
         role="navigation"
         aria-label="Table pagination"
-        style="display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap;"
       >
         <button
           class="btn"
@@ -60,9 +97,9 @@
         >
           ‹ Prev
         </button>
-        <span style="font-size: 13px; color: var(--color-text-secondary);">
+        <span class="pagination-bar__info">
           Page {{ pagination.page }} of {{ pagination.total_pages }}
-          ({{ pagination.total_items }} results)
+          &middot; {{ pagination.total_items }} results
         </span>
         <button
           class="btn"
@@ -78,6 +115,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from "vue";
 import type { AuctionRecord, Pagination } from "@/services/api";
 
 interface Props {
@@ -91,6 +129,18 @@ defineProps<Props>();
 const emit = defineEmits<{
   "page-change": [number];
 }>();
+
+const expandedIds = ref(new Set<number>());
+
+function toggleRow(id: number) {
+  const next = new Set(expandedIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  expandedIds.value = next;
+}
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr + "T00:00:00Z").toLocaleDateString("en-GB", {
@@ -118,5 +168,48 @@ function formatPrice(value: number): string {
 .text-muted {
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination-bar__info {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* Expandable aggregate rows */
+.auction-row--expandable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.expand-icon {
+  display: inline-block;
+  width: 1em;
+  font-size: 0.7em;
+  color: var(--color-text-secondary);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* Per-technology sub-rows */
+.auction-row--tech {
+  background-color: var(--color-bg-section) !important;
+}
+
+.auction-row--tech:hover {
+  background-color: var(--color-table-row-hover) !important;
+}
+
+.tech-cell {
+  padding-left: 2rem;
+  font-size: 0.9em;
+  color: var(--color-text-secondary);
 }
 </style>

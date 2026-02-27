@@ -6,6 +6,22 @@ from pydantic import BaseModel, ConfigDict
 # ─── Auction ────────────────────────────────────────────────────────────────
 
 
+class TechnologyRowResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    auction_date: date
+    region: str
+    production_period: str
+    technology: str | None
+    volume_offered_mwh: Decimal | None
+    volume_allocated_mwh: Decimal | None
+    num_bids: int | None
+    num_winning_bids: int | None
+    weighted_avg_price_eur: Decimal | None
+    status: str
+
+
 class AuctionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -20,6 +36,7 @@ class AuctionResponse(BaseModel):
     num_winning_bids: int | None
     weighted_avg_price_eur: Decimal | None
     status: str
+    technology_rows: list[TechnologyRowResponse] = []
 
 
 class UpcomingAuctionResponse(BaseModel):

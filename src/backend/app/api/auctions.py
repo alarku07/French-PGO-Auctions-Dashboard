@@ -5,10 +5,10 @@ GET /api/v1/auctions/upcoming — upcoming scheduled auctions
 GET /api/v1/regions           — distinct regions in dataset
 GET /api/v1/technologies      — distinct technologies in dataset
 """
-from datetime import date, timedelta
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import distinct, func, select
+from sqlalchemy import and_, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -19,27 +19,12 @@ from app.schemas.auction import (
     PaginationMeta,
     RegionListResponse,
     TechnologyListResponse,
+    TechnologyRowResponse,
     UpcomingAuctionListResponse,
     UpcomingAuctionResponse,
 )
 
 router = APIRouter()
-
-_VALID_SORT_FIELDS = {
-    "auction_date",
-    "region",
-    "volume_allocated_mwh",
-    "weighted_avg_price_eur",
-}
-
-
-def _previous_month_range() -> tuple[date, date]:
-    """Return (first_day, last_day) of the previous calendar month."""
-    today = date.today()
-    first_of_this_month = today.replace(day=1)
-    last_of_prev = first_of_this_month - timedelta(days=1)
-    first_of_prev = last_of_prev.replace(day=1)
-    return first_of_prev, last_of_prev
 
 
 def _parse_date(value: str | None, param_name: str) -> date | None:
@@ -73,9 +58,7 @@ async def list_auctions(
     region: str | None = Query(None),
     technology: str | None = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1),
-    sort_by: str = Query("auction_date"),
-    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    page_size: int = Query(24, ge=1),
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ) -> AuctionListResponse:
     if page_size > 200:
@@ -90,24 +73,8 @@ async def list_auctions(
             },
         )
 
-    if sort_by not in _VALID_SORT_FIELDS:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": f"Invalid sort_by field '{sort_by}'. "
-                    f"Allowed: {sorted(_VALID_SORT_FIELDS)}",
-                    "details": None,
-                }
-            },
-        )
-
     start = _parse_date(start_date, "start_date")
     end = _parse_date(end_date, "end_date")
-
-    if start is None and end is None:
-        start, end = _previous_month_range()
 
     # Base query
     stmt = select(Auction).where(Auction.status == "past")
@@ -128,17 +95,13 @@ async def list_auctions(
         stmt = stmt.where(Auction.technology == technology)
         count_stmt = count_stmt.where(Auction.technology == technology)
     else:
-        # No technology selected: show only aggregate rows (technology IS NULL)
-        # so each (date, region) appears exactly once.
+        # Default: show only aggregate rows (technology IS NULL)
+        # so each (date, region) appears exactly once in the main list.
         stmt = stmt.where(Auction.technology.is_(None))
         count_stmt = count_stmt.where(Auction.technology.is_(None))
 
-    # Sorting — region asc as deterministic tiebreaker
-    sort_col = getattr(Auction, sort_by)
-    stmt = stmt.order_by(
-        sort_col.desc() if sort_order == "desc" else sort_col.asc(),
-        Auction.region.asc(),
-    )
+    # Sort by auction_date desc, region asc as deterministic tiebreaker
+    stmt = stmt.order_by(Auction.auction_date.desc(), Auction.region.asc())
 
     # Total count
     total_result = await session.execute(count_stmt)
@@ -151,10 +114,45 @@ async def list_auctions(
     result = await session.execute(stmt)
     auctions = result.scalars().all()
 
+    # Fetch per-technology breakdown for the returned aggregate rows
+    tech_map: dict[tuple, list[Auction]] = {}
+    if auctions:
+        tech_conditions = [
+            and_(
+                Auction.auction_date == a.auction_date,
+                Auction.region == a.region,
+                Auction.production_period == a.production_period,
+            )
+            for a in auctions
+        ]
+        tech_stmt = (
+            select(Auction)
+            .where(Auction.status == "past")
+            .where(Auction.technology.isnot(None))
+            .where(or_(*tech_conditions))
+            .order_by(Auction.technology.asc())
+        )
+        tech_result = await session.execute(tech_stmt)
+        for t in tech_result.scalars().all():
+            key = (t.auction_date, t.region, t.production_period)
+            tech_map.setdefault(key, []).append(t)
+
     total_pages = max(1, -(-total_items // page_size))  # ceiling division
 
     return AuctionListResponse(
-        data=[AuctionResponse.model_validate(a) for a in auctions],
+        data=[
+            AuctionResponse.model_validate(a).model_copy(
+                update={
+                    "technology_rows": [
+                        TechnologyRowResponse.model_validate(t)
+                        for t in tech_map.get(
+                            (a.auction_date, a.region, a.production_period), []
+                        )
+                    ]
+                }
+            )
+            for a in auctions
+        ],
         pagination=PaginationMeta(
             page=page,
             page_size=page_size,

@@ -72,7 +72,7 @@ python -m app.services.sync --backfill</pre>
         <div class="section-white auctions-layout-grid">
           <!-- Past Auctions Table -->
           <div>
-            <h2 class="section-title">Recent Auctions</h2>
+            <h2 class="section-title">Auctions</h2>
             <AuctionTable
               :auctions="auctions"
               :pagination="auctionPagination"

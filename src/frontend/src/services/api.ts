@@ -9,6 +9,20 @@ const apiClient = axios.create({
 
 // ─── Response Types ────────────────────────────────────────────────────────
 
+export interface TechnologyRow {
+  id: number;
+  auction_date: string;
+  region: string;
+  production_period: string;
+  technology: string | null;
+  volume_offered_mwh: number | null;
+  volume_allocated_mwh: number | null;
+  num_bids: number | null;
+  num_winning_bids: number | null;
+  weighted_avg_price_eur: number | null;
+  status: "past" | "upcoming";
+}
+
 export interface AuctionRecord {
   id: number;
   auction_date: string;
@@ -21,6 +35,7 @@ export interface AuctionRecord {
   num_winning_bids: number | null;
   weighted_avg_price_eur: number | null;
   status: "past" | "upcoming";
+  technology_rows: TechnologyRow[];
 }
 
 export interface UpcomingAuction {
@@ -105,8 +120,6 @@ export interface AuctionParams {
   technology?: string;
   page?: number;
   page_size?: number;
-  sort_by?: string;
-  sort_order?: "asc" | "desc";
 }
 
 export interface ChartParams {

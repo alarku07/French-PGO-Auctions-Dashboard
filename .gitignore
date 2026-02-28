@@ -48,6 +48,9 @@ Thumbs.db
 # AI clients
 .claude/settings.local.json
 
+# Docker secrets (never commit actual env values)
+.env.docker
+
 # Misc (original planning file)
 initital task.pdf
 blackboard.md

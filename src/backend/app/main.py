@@ -92,6 +92,12 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Request logging
 app.add_middleware(RequestLoggingMiddleware)
 
+# Health check — not under /api prefix so Docker can reach it directly
+@app.get("/health", include_in_schema=False)
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 # API routes
 app.include_router(api_router)
 

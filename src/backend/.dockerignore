@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.env.*
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+pgo_auctions.db
+*.egg-info/
+.git/
+pgo_auctions_backend.egg-info/

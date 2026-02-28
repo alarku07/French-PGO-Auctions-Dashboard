@@ -18,6 +18,8 @@ services:
   frontend:
     build:
       context: src/frontend
+      args:
+        - VITE_API_URL="www.backend.com"
       target: dev
     volumes:
       - ./src/frontend:/app

@@ -11,6 +11,7 @@
     "strictNullChecks": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "types": ["vite/client"],
     "noEmit": true,
     "jsx": "preserve",
     "baseUrl": ".",

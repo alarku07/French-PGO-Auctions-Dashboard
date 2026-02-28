@@ -32,6 +32,8 @@ services:
   frontend:
     build:
       context: src/frontend
+      args:
+        - VITE_API_URL=${VITE_API_URL}
     restart: on-failure
 
   nginx-proxy:

@@ -86,7 +86,7 @@ The application is deployed with the free plan on [Render](https://render.com/) 
 ---
 
 ## Architecture
-
+Structure for independent fully dockerized solution.
 ```
                            ┌─────────────────────────────────────────────────────┐
                            │                   USER BROWSER                      │
@@ -101,7 +101,7 @@ The application is deployed with the free plan on [Render](https://render.com/) 
                                       │                          │
                ┌──────────────────────▼───────────┐  ┌───────────▼─────────────────────┐
                │         FRONTEND SERVICE         │  │       BACKEND SERVICE           │
-               │   Nginx 1.29 / Alpine            │  │   Python 3.13 / Uvicorn         │
+               │   Nginx 1.29 / Alpine            │  │   Python 3.14 / Uvicorn         │
                │   Serves pre-built Vue 3 SPA     │  │   FastAPI + SQLAlchemy 2.0      │
                │                                  │  │                                 │
                │   Components:                    │  │   API Routes (/api/v1):         │
@@ -124,7 +124,7 @@ The application is deployed with the free plan on [Render](https://render.com/) 
                            │   eex.com               │◄────────────────────────────┘   │
                            │   (HTML pages           │   HTTPx scrape + parse          │
                            │    + Excel files)       │                                 │
-                           └─────────────────────────┘ └─────────────────┬─────────────┘
+                           └─────────────────────────┘ └──────────────────┬────────────┘
                                                                           │ asyncpg
                            ┌──────────────────────────────────────────────▼────────────┐
                            │                  POSTGRESQL 16                            │
@@ -393,6 +393,4 @@ Current solution doesn't have access to notifications services like e-mail or sm
 - **Push notifications** - A user could subscribe for (e-mail) alerts when new auctions are published.
 - **Export** - Allow user to download data e.g. as CSV or Excel.
 - **Internationalization** - Multi-language support beyond English (e.g. Estonian, French etc.).
-- **More data**
-  - For example allow to view and search Account Holders from https://www.eex.com/en/markets/energy-certificates/french-power-gos/account-holder
-  - Show countries
+- **More data** - For example allow to view and search Account Holders from https://www.eex.com/en/markets/energy-certificates/french-power-gos/account-holder

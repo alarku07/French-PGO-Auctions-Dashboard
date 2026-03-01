@@ -15,7 +15,7 @@ export default defineConfig({
     hmr: { host: "localhost", port: 80, protocol: "ws" },
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL,
+        target: process.env.VITE_API_URL ?? "http://localhost",
         changeOrigin: true,
       },
     },

@@ -113,6 +113,13 @@ python -m app.services.sync --backfill</pre>
         style="color: var(--color-accent-light);"
       >EEX French Auctions Power</a>.
       Read-only dashboard — no personal data collected.
+      <br />
+      <a
+        href="https://github.com/alarku07/French-PGO-Auctions-Dashboard"
+        target="_blank"
+        rel="noopener noreferrer"
+        style="color: var(--color-accent-white);"
+      ><img src="/github-logo.png" alt="GitHub" style="height: 1.3em; vertical-align: middle; margin-right: 0.3em; background-color: white; border-radius: 2px;" />Source on GitHub</a>.
     </footer>
   </div>
 </template>

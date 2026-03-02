@@ -39,6 +39,9 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 RUN chmod +x /app/docker-entrypoint.sh
 
+# Pre-create the downloads cache directory with correct ownership
+RUN mkdir -p /app/data/downloads && chown -R appuser:appuser /app/data
+
 ENV PYTHONUNBUFFERED=1
 
 ARG VERSION=dev
